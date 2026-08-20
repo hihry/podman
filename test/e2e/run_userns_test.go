@@ -198,6 +198,15 @@ var _ = Describe("Podman UserNS support", func() {
 		Expect(exec2).Should(ExitCleanly())
 	})
 
+	It("podman --userns=keep-id overrides image default user", func() {
+		session := podmanTest.Podman([]string{"run", "--userns=keep-id", CITEST_IMAGE, "id", "-u"})
+		session.WaitWithDefaultTimeout()
+		Expect(session).Should(ExitCleanly())
+
+		uid := strconv.Itoa(os.Geteuid())
+		Expect(session.OutputToString()).To(Equal(uid))
+	})
+
 	It("podman --userns=auto", func() {
 		u, err := user.Current()
 		Expect(err).ToNot(HaveOccurred())
