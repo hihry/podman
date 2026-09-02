@@ -1444,4 +1444,40 @@ COPY --from=img2 /etc/alpine-release /prefix-test/container-prefix.txt`
 		session.WaitWithDefaultTimeout()
 		Expect(session).Should(ExitWithError(125, `missing required key "type"`))
 	})
+
+	It("podman multi-stage build local base image pull policy bug #29633", func() {
+		// Stage 1: Build the base image with a short name
+		dockerfileBase := `
+FROM scratch
+COPY app/main /main
+ENTRYPOINT ["/main"]
+`
+		dockerfileBasePath := filepath.Join(podmanTest.TempDir, "Dockerfile.base")
+		err := os.WriteFile(dockerfileBasePath, []byte(dockerfileBase), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create a dummy /main to satisfy COPY
+		err = os.MkdirAll(filepath.Join(podmanTest.TempDir, "app"), 0o755)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.WriteFile(filepath.Join(podmanTest.TempDir, "app", "main"), []byte("test"), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		sessionBase := podmanTest.Podman([]string{"build", "-t", "container-hierarchy/base:latest", "-f", dockerfileBasePath, podmanTest.TempDir})
+		sessionBase.WaitWithDefaultTimeout()
+		Expect(sessionBase).Should(ExitCleanly())
+
+		// Stage 2: Reference it as an ARG (which triggers len(stages)>1 logic in buildah under the hood)
+		dockerfileApp := `
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+`
+		dockerfileAppPath := filepath.Join(podmanTest.TempDir, "Dockerfile.app")
+		err = os.WriteFile(dockerfileAppPath, []byte(dockerfileApp), 0o644)
+		Expect(err).ToNot(HaveOccurred())
+
+		// This build should succeed cleanly without hanging or trying to pull and failing
+		sessionApp := podmanTest.Podman([]string{"build", "--build-arg", "BASE_IMAGE=container-hierarchy/base:latest", "-t", "container-hierarchy/app:latest", "-f", dockerfileAppPath, podmanTest.TempDir})
+		sessionApp.WaitWithDefaultTimeout()
+		Expect(sessionApp).Should(ExitCleanly())
+	})
 })
