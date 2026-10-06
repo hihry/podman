@@ -41,3 +41,8 @@ t GET libpod/containers/stopped-stats/stats?stream=false 409 \
     .cause="container is stopped" \
     .response=409
 podman rm stopped-stats
+
+# test compat API for stream=false&one-shot=true
+podman run -dt --name testctr4 $IMAGE top &>/dev/null
+t GET "containers/testctr4/stats?stream=false&one-shot=true" 200
+podman rm -f testctr4

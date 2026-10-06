@@ -65,21 +65,26 @@ func StatsContainer(w http.ResponseWriter, r *http.Request) {
 		preCPUStats = getPreCPUStats(stats)
 	}
 
+	first := true
+
 streamLabel: // A label to flatten the scope
 	select {
 	case <-r.Context().Done():
 		logrus.Debugf("Client connection (container stats) cancelled")
 
 	default:
-		stats, err = ctnr.GetContainerStats(stats)
-		if err != nil {
-			if wroteContent {
-				logrus.Errorf("Unable to get container stats: %v", err)
-			} else {
-				utils.Error(w, statsErrorStatus(err), err)
+		if !first {
+			stats, err = ctnr.GetContainerStats(stats)
+			if err != nil {
+				if wroteContent {
+					logrus.Errorf("Unable to get container stats: %v", err)
+				} else {
+					utils.Error(w, statsErrorStatus(err), err)
+				}
+				return
 			}
-			return
 		}
+		first = false
 		s, err := statsContainerJSON(ctnr, stats, preCPUStats, onlineCPUs)
 		if err != nil {
 			if wroteContent {
